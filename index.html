@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diell's Vocab Quest</title>
+<style>
+  :root { --red:#c8102e; --green:#046a38; --gold:#f4c430; --grey:#5b6070; --purple:#6b3fa0; --ink:#14213d; --paper:#fffdf5; --line:#e4dcc4; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Trebuchet MS", "Segoe UI", sans-serif; background:var(--paper); color:var(--ink); }
+  header { display:flex; align-items:center; gap:12px; padding:12px 16px; background:linear-gradient(90deg,var(--green) 0 40%,var(--red) 40% 100%); color:#fff; }
+  header h1 { font-size:20px; margin:0; flex:1; }
+  button { font:inherit; cursor:pointer; border:0; border-radius:12px; padding:10px 16px; background:var(--ink); color:#fff; }
+  button.ghost { background:#fff; color:var(--ink); border:2px solid var(--ink); }
+  button:disabled { opacity:.4; cursor:default; }
+  main { max-width:1200px; margin:0 auto; padding:16px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; }
+  .scene-card { border:3px solid var(--ink); border-radius:16px; padding:16px; background:#fff; text-align:left; color:var(--ink); min-height:120px; }
+  .scene-card.locked { opacity:.45; border-style:dashed; cursor:default; }
+  .scene-card b { display:block; font-size:18px; margin-bottom:6px; }
+  .layout { display:grid; grid-template-columns:minmax(0,2fr) minmax(260px,1fr); gap:16px; }
+  @media (max-width:800px) { .layout { grid-template-columns:1fr; } }
+  .stage { position:relative; border:3px solid var(--ink); border-radius:16px; overflow:hidden; background:#dfe8d8; aspect-ratio:3/2; }
+  @supports not (aspect-ratio: 1 / 1) { .stage { height:0; padding-top:66.667%; } }
+  .stage img.layer { position:absolute; top:0; right:0; bottom:0; left:0; z-index:0; width:100%; height:100%; object-fit:cover; display:block; opacity:0; transition:opacity .8s ease; }
+  .stage img.layer.on { opacity:1; }
+  .stage .missing { position:absolute; left:8px; right:8px; top:8px; z-index:1; margin:0; padding:6px 10px; border-radius:8px; background:rgba(255,253,245,.9); pointer-events:none; }
+  .spot { position:absolute; z-index:2; transform:translate(-50%,-50%); border-radius:50%; padding:0; background:transparent; height:0; }
+  .stage.explore .spot::after { content:attr(data-n); position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:28px; height:28px; line-height:28px; border-radius:50%; background:var(--gold); color:var(--ink); font-weight:bold; border:2px solid var(--ink); }
+  .stage.recall .spot { cursor:default; }
+  .spot.active { box-shadow:0 0 0 4px var(--gold); animation:pulse 1.2s infinite; }
+  .spot.reveal { animation:reveal 2.5s ease-out .4s forwards; }
+  .spot.right { box-shadow:0 0 0 5px var(--green); }
+  .spot.wrong { box-shadow:0 0 0 5px var(--red); }
+  @keyframes pulse { 50% { box-shadow:0 0 0 10px var(--gold); } }
+  @keyframes reveal {
+    0% { box-shadow:0 0 0 0 rgba(244,196,48,0); }
+    25% { box-shadow:0 0 18px 8px rgba(244,196,48,.9); }
+    55% { box-shadow:0 0 14px 5px rgba(244,196,48,.4); }
+    100% { box-shadow:0 0 0 0 rgba(244,196,48,0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stage img.layer { transition:none; }
+    .spot.reveal { animation:none; }
+  }
+  .panel { border:3px solid var(--ink); border-radius:16px; padding:16px; background:#fff; display:flex; flex-direction:column; gap:12px; }
+  .tabs { display:flex; gap:8px; }
+  .tabs button { flex:1; padding:8px; }
+  .tabs button[aria-pressed="false"] { background:#fff; color:var(--ink); border:2px solid var(--ink); }
+  .word { font-size:28px; font-weight:bold; margin:0; }
+  .chip { display:inline-block; padding:4px 12px; border-radius:999px; color:#fff; font-weight:bold; margin:2px 4px 2px 0; }
+  .chip.syn { background:linear-gradient(90deg,var(--green),var(--red)); }
+  .chip.ant { background:linear-gradient(90deg,var(--grey),var(--purple)); }
+  .story { font-size:17px; line-height:1.5; margin:0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .opts { display:grid; gap:8px; }
+  .opts button { background:#fff; color:var(--ink); border:2px solid var(--ink); text-align:left; }
+  .opts button.right { background:var(--gold); color:var(--ink); font-weight:bold; }
+  .opts button.right::before { content:"\2713  "; }
+  .opts button.wrong { border-style:dashed; text-decoration:line-through; opacity:.7; }
+  .opts button.wrong::before { content:"\2717  "; }
+  .opts.syn button { border-left:10px solid var(--green); border-right:10px solid var(--red); }
+  .opts.ant button { border-left:10px solid var(--grey); border-right:10px solid var(--purple); }
+  .score { font-weight:bold; }
+  .muted { color:var(--grey); font-size:14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Diell's Vocab Quest</h1>
+  <button class="ghost" id="homeBtn" hidden>All scenes</button>
+</header>
+<main id="app"><p id="boot" class="muted">Loading. If this message stays, open this file in Safari or Chrome on a computer, not in a preview window.</p></main>
+
+<script>
+window.onerror = function (msg, src, line) {
+  var box = document.getElementById('app');
+  var p = document.createElement('p');
+  p.className = 'muted';
+  p.textContent = 'Sorry, something went wrong. Please send this line to your tutor: ' + msg + ' (line ' + line + ')';
+  box.appendChild(p);
+};
+[Element.prototype, Document.prototype, DocumentFragment.prototype].forEach(function (proto) {
+  if (proto.replaceChildren) return;
+  proto.replaceChildren = function () {
+    while (this.lastChild) this.removeChild(this.lastChild);
+    for (var i = 0; i < arguments.length; i++) {
+      var n = arguments[i];
+      this.appendChild(typeof n === 'string' ? document.createTextNode(n) : n);
+    }
+  };
+});
+</script>
+<script src="scenes.js"></script>
+<script src="quiz-core.js"></script>
+<script>
+(function () {
+  const KEY = 'vocabQuest.v1';
+  const scenes = window.SCENES;
+  const Q = window.QuizCore;
+  const app = document.getElementById('app');
+  const homeBtn = document.getElementById('homeBtn');
+  const audio = new Audio();
+  let progress = Q.loadProgress(readStore());
+
+  function readStore() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(progress)); } catch (e) { /* storage unavailable */ } }
+  function play(name) { audio.pause(); audio.src = 'audio/' + name + '.mp3'; audio.play().catch(function () {}); }
+  function stop() { audio.pause(); }
+  function el(tag, attrs, kids) {
+    const n = document.createElement(tag);
+    for (const k in attrs || {}) {
+      if (k === 'text') n.textContent = attrs[k];
+      else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), attrs[k]);
+      else if (attrs[k] !== false && attrs[k] != null) n.setAttribute(k, attrs[k] === true ? '' : attrs[k]);
+    }
+    for (const c of kids || []) n.append(c);
+    return n;
+  }
+
+  homeBtn.addEventListener('click', home);
+
+  function home() {
+    stop();
+    homeBtn.hidden = true;
+    const cards = scenes.map(function (s, i) {
+      const open = Q.isUnlocked(scenes, progress, i);
+      const done = progress.scenes[s.id];
+      const status = !open ? 'Locked. Finish the scene before it.' : done ? 'Best: ' + done.best + ' / ' + done.total + ' goals' : 'Ready to play';
+      return el('button', { class: 'scene-card' + (open ? '' : ' locked'), disabled: !open, onclick: function () { openScene(i); } },
+        [el('b', { text: (i + 1) + '. ' + s.title }), el('span', { text: status })]);
+    });
+    app.replaceChildren(el('p', { class: 'muted', text: 'Pick a scene. Watch the story, explore the picture, then score goals in Recall.' }), el('div', { class: 'cards' }, cards));
+  }
+
+  function openScene(index) {
+    homeBtn.hidden = false;
+    const comeback = Q.pickComeback(scenes, index, progress, Math.random);
+    if (comeback.length) runComeback(index, comeback); else runScene(index, 'watch');
+  }
+
+  function choiceBlock(q, onDone) {
+    const kind = q.type === 'synonym' ? 'syn' : 'ant';
+    let locked = false;
+    const feedback = el('p', { class: 'story' });
+    const next = el('button', { text: 'Next', hidden: true, onclick: function () { onDone(); } });
+    const buttons = q.options.map(function (opt) {
+      return el('button', { text: opt, onclick: function (ev) {
+        if (locked) return;
+        locked = true;
+        const ok = opt === q.answer;
+        Q.recordAnswer(progress, q.wordId, ok);
+        save();
+        ev.currentTarget.classList.add(ok ? 'right' : 'wrong');
+        buttons.forEach(function (b) { if (b.textContent === q.answer) b.classList.add('right'); });
+        feedback.textContent = ok ? 'Goal!' : 'Not this time. The answer is "' + q.answer + '".';
+        next.hidden = false;
+        next.dataset.ok = ok ? '1' : '0';
+      } });
+    });
+    return { nodes: [el('span', { class: 'chip ' + kind, text: kind === 'syn' ? 'Same meaning' : 'Opposite meaning' }), el('p', { class: 'story', text: q.prompt }), el('div', { class: 'opts ' + kind }, buttons), feedback, next], next: next };
+  }
+
+  function runComeback(index, questions) {
+    let i = 0;
+    function show() {
+      if (i >= questions.length) { runScene(index, 'watch'); return; }
+      const block = choiceBlock(questions[i], function () { i += 1; show(); });
+      app.replaceChildren(el('div', { class: 'panel' }, [el('p', { class: 'word', text: 'Comeback round' }), el('p', { class: 'muted', text: 'Question ' + (i + 1) + ' of ' + questions.length + ' from earlier scenes' })].concat(block.nodes)));
+    }
+    show();
+  }
+
+  function runScene(index, mode) {
+    const scene = scenes[index];
+    const stage = el('div', { class: 'stage ' + mode });
+    const layers = [el('img', { class: 'layer', alt: '' }), el('img', { class: 'layer', alt: '' })];
+    stage.append(layers[0], layers[1]);
+    const preloaded = scene.frames.map(function (f) { const im = new Image(); im.src = f; return im; });
+    let front = 0;
+    let shown = null;
+    let token = 0;
+    let missingNote = null;
+    function clearMissing() { if (missingNote) { missingNote.remove(); missingNote = null; } }
+    // Loads src into the hidden layer, then crossfades it over the visible one.
+    // Every call bumps token, so a late load or error from an older call is ignored.
+    function showFrame(src) {
+      const mine = ++token;
+      if (src === shown) { clearMissing(); return; }
+      const back = layers[1 - front];
+      const cur = layers[front];
+      function done() {
+        if (mine !== token) return;
+        back.onload = back.onerror = null;
+        clearMissing();
+        back.alt = scene.title + ' scene';
+        cur.alt = '';
+        back.classList.add('on');
+        cur.classList.remove('on');
+        front = 1 - front;
+        shown = src;
+      }
+      function fail() {
+        if (mine !== token) return;
+        back.onload = back.onerror = null;
+        clearMissing();
+        missingNote = el('p', { class: 'muted missing', text: 'Picture missing: ' + src });
+        stage.append(missingNote);
+      }
+      back.onload = done;
+      back.onerror = fail;
+      if (back.getAttribute('src') === src && back.complete) { if (back.naturalWidth > 0) done(); else fail(); }
+      else back.src = src;
+    }
+    const spots = {};
+    scene.words.forEach(function (w, n) {
+      const b = el('button', { class: 'spot', 'data-n': n + 1, 'aria-label': mode === 'recall' ? 'picture clue' : w.symbol, style: 'left:' + w.x + '%;top:' + w.y + '%;width:' + (w.r * 2) + '%;padding-bottom:' + (w.r * 2) + '%' });
+      b.addEventListener('click', function () { onSpot(w); });
+      spots[w.id] = b;
+      stage.append(b);
+    });
+    const body = el('div');
+    const tabs = el('div', { class: 'tabs' }, ['watch', 'explore', 'recall'].map(function (m) {
+      return el('button', { text: m.charAt(0).toUpperCase() + m.slice(1), 'aria-pressed': String(m === mode), onclick: function () { stop(); runScene(index, m); } });
+    }));
+    const panel = el('div', { class: 'panel' }, [el('p', { class: 'muted', text: scene.title }), tabs, body]);
+    app.replaceChildren(el('div', { class: 'layout' }, [stage, panel]));
+    let onSpot = function () {};
+
+    function clearMarks() { Object.values(spots).forEach(function (s) { s.classList.remove('active', 'reveal', 'right', 'wrong'); }); }
+    function card(w) {
+      return [el('p', { class: 'word', text: w.word }), el('p', { class: 'story', text: w.meaning }),
+        el('div', {}, [el('span', { class: 'chip syn', text: 'Same: ' + w.synonym }), el('span', { class: 'chip ant', text: 'Opposite: ' + w.antonym })])];
+    }
+
+    if (mode === 'watch') {
+      let step = 0;
+      const total = scene.words.length;
+      function show() {
+        clearMarks();
+        const w = step === 0 ? null : scene.words[step - 1];
+        if (w) spots[w.id].classList.add('reveal');
+        showFrame(scene.frames[step]);
+        play(w ? w.id : scene.id + '_intro');
+        body.replaceChildren.apply(body, (w ? card(w) : [el('p', { class: 'word', text: scene.title })]).concat([
+          el('p', { class: 'story', text: w ? w.story : scene.intro }),
+          el('p', { class: 'muted', text: 'Step ' + step + ' of ' + total }),
+          el('div', { class: 'row' }, [
+            el('button', { class: 'ghost', text: 'Back', disabled: step === 0, onclick: function () { step -= 1; show(); } }),
+            el('button', { class: 'ghost', text: 'Replay', onclick: function () { play(w ? w.id : scene.id + '_intro'); } }),
+            step < total
+              ? el('button', { text: 'Next', onclick: function () { step += 1; show(); } })
+              : el('button', { text: 'Go to Explore', onclick: function () { stop(); runScene(index, 'explore'); } }),
+          ]),
+        ]));
+      }
+      show();
+    }
+
+    if (mode !== 'watch') showFrame(scene.frames[scene.frames.length - 1]);
+
+    if (mode === 'explore') {
+      body.replaceChildren(el('p', { class: 'story', text: 'Tap any numbered clue in the picture.' }));
+      onSpot = function (w) {
+        clearMarks();
+        spots[w.id].classList.add('active');
+        play(w.id);
+        body.replaceChildren.apply(body, card(w).concat([el('p', { class: 'story', text: w.story })]));
+      };
+    }
+
+    if (mode === 'recall') {
+      const questions = Q.makeQuestions(scene, scenes, Math.random);
+      let i = 0;
+      let score = 0;
+      function finish() {
+        Q.completeScene(progress, scene.id, score, questions.length);
+        save();
+        onSpot = function () {};
+        clearMarks();
+        body.replaceChildren(el('p', { class: 'word', text: 'Full time!' }), el('p', { class: 'score', text: score + ' / ' + questions.length + ' goals' }),
+          el('div', { class: 'row' }, [el('button', { text: 'Play again', onclick: function () { runScene(index, 'recall'); } }), el('button', { class: 'ghost', text: 'All scenes', onclick: home })]));
+      }
+      function show() {
+        clearMarks();
+        if (i >= questions.length) { finish(); return; }
+        const q = questions[i];
+        const head = el('p', { class: 'muted', text: 'Question ' + (i + 1) + ' of ' + questions.length + '   Goals: ' + score });
+        if (q.type === 'find') {
+          let locked = false;
+          const feedback = el('p', { class: 'story' });
+          const next = el('button', { text: 'Next', hidden: true, onclick: function () { i += 1; show(); } });
+          onSpot = function (w) {
+            if (locked) return;
+            locked = true;
+            const ok = w.id === q.answer;
+            if (ok) score += 1;
+            Q.recordAnswer(progress, q.wordId, ok);
+            save();
+            spots[w.id].classList.add(ok ? 'right' : 'wrong');
+            spots[q.answer].classList.add('right');
+            feedback.textContent = ok ? 'Goal!' : 'Not this time. The right clue is circled in green.';
+            next.hidden = false;
+          };
+          body.replaceChildren(head, el('p', { class: 'story', text: q.prompt }), feedback, next);
+        } else {
+          onSpot = function () {};
+          const block = choiceBlock(q, function () { if (block.next.dataset.ok === '1') score += 1; i += 1; show(); });
+          body.replaceChildren.apply(body, [head].concat(block.nodes));
+        }
+      }
+      show();
+    }
+  }
+
+  home();
+})();
+</script>
+</body>
+</html>
