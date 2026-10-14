@@ -17,7 +17,6 @@
   main { max-width:1200px; margin:0 auto; padding:16px; }
   .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; }
   .scene-card { border:3px solid var(--ink); border-radius:16px; padding:16px; background:#fff; text-align:left; color:var(--ink); min-height:120px; }
-  .scene-card.locked { opacity:.45; border-style:dashed; cursor:default; }
   .scene-card b { display:block; font-size:18px; margin-bottom:6px; }
   .layout { display:grid; grid-template-columns:minmax(0,2fr) minmax(260px,1fr); gap:16px; }
   @media (max-width:800px) { .layout { grid-template-columns:1fr; } }
@@ -103,8 +102,6 @@ window.onerror = function (msg, src, line) {
   const homeBtn = document.getElementById('homeBtn');
   const audio = new Audio();
   let progress = Q.loadProgress(readStore());
-  // Tutor link: add ?unlock to the address to open every scene.
-  const unlockAll = /[?&]unlock/.test(location.search);
 
   function readStore() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(progress)); } catch (e) { /* storage unavailable */ } }
@@ -127,10 +124,9 @@ window.onerror = function (msg, src, line) {
     stop();
     homeBtn.hidden = true;
     const cards = scenes.map(function (s, i) {
-      const open = unlockAll || Q.isUnlocked(scenes, progress, i);
       const done = progress.scenes[s.id];
-      const status = !open ? 'Locked. Finish the scene before it.' : done ? 'Best: ' + done.best + ' / ' + done.total + ' goals' : 'Ready to play';
-      return el('button', { class: 'scene-card' + (open ? '' : ' locked'), disabled: !open, onclick: function () { openScene(i); } },
+      const status = done ? 'Best: ' + done.best + ' / ' + done.total + ' goals' : 'Ready to play';
+      return el('button', { class: 'scene-card', onclick: function () { openScene(i); } },
         [el('b', { text: (i + 1) + '. ' + s.title }), el('span', { text: status })]);
     });
     app.replaceChildren(el('p', { class: 'muted', text: 'Pick a scene. Watch the story, explore the picture, then score goals in Recall.' }), el('div', { class: 'cards' }, cards));
