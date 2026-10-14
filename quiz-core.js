@@ -13,7 +13,8 @@
   }
 
   function buildOptions(word, kind, pool, rng) {
-    const seen = new Set([word.word, word.synonym, word.antonym].map((v) => v.toLowerCase()));
+    // word.avoid lists values that would be a second fair answer, so they are never offered.
+    const seen = new Set([word.word, word.synonym, word.antonym].concat(word.avoid || []).map((v) => v.toLowerCase()));
     const candidates = [];
     for (const w of pool) {
       for (const v of [w.synonym, w.antonym]) {

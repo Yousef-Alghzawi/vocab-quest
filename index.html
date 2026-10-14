@@ -103,6 +103,8 @@ window.onerror = function (msg, src, line) {
   const homeBtn = document.getElementById('homeBtn');
   const audio = new Audio();
   let progress = Q.loadProgress(readStore());
+  // Tutor link: add ?unlock to the address to open every scene.
+  const unlockAll = /[?&]unlock/.test(location.search);
 
   function readStore() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(progress)); } catch (e) { /* storage unavailable */ } }
@@ -125,7 +127,7 @@ window.onerror = function (msg, src, line) {
     stop();
     homeBtn.hidden = true;
     const cards = scenes.map(function (s, i) {
-      const open = Q.isUnlocked(scenes, progress, i);
+      const open = unlockAll || Q.isUnlocked(scenes, progress, i);
       const done = progress.scenes[s.id];
       const status = !open ? 'Locked. Finish the scene before it.' : done ? 'Best: ' + done.best + ' / ' + done.total + ' goals' : 'Ready to play';
       return el('button', { class: 'scene-card' + (open ? '' : ' locked'), disabled: !open, onclick: function () { openScene(i); } },
